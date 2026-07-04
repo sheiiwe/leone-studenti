@@ -54,6 +54,32 @@
   .chatbar{display:flex;gap:8px;align-items:center;padding:10px;border-top:1px solid var(--border);background:#fff}
   .chatbar textarea{min-height:42px;max-height:120px}
   .iconbtn{background:#eef2f7;border:1px solid #dbe5f0;border-radius:9px;padding:9px 11px;cursor:pointer;font-size:16px}
+  /* --- classi condivise usate nei portali (badge/tabella/chip) --- */
+  :root{ --surface2:#f7f8f6 }
+  .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;line-height:1.4;white-space:nowrap}
+  .badge.bg{background:#e8f6ee;color:#1d7a45}
+  .badge.br{background:#fdeceb;color:#b13226}
+  .badge.ba{background:#fdf3e3;color:#a9711b}
+  .badge.bb{background:#e9f1fa;color:var(--blu)}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:4px 11px;font-size:12.5px;color:var(--text2)}
+  .tbl{width:100%;border-collapse:collapse;font-size:13px}
+  .tbl th{text-align:left;font-weight:600;color:var(--text2);padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px}
+  .tbl td{padding:9px 10px;border-bottom:0.5px solid var(--border)}
+  /* --- Prenota lezioni --- */
+  .pr-doc{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:14px;border:1px solid var(--border);border-radius:12px;margin-bottom:10px;background:#fff}
+  .pr-doc .av{width:44px;height:44px;border-radius:50%;background:var(--blu);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0}
+  .pr-day{margin:14px 0 6px;font-weight:700;font-size:14px;text-transform:capitalize;color:var(--text)}
+  .pr-slots{display:flex;flex-wrap:wrap;gap:8px}
+  .pr-slot{border:1px solid var(--blu);background:#fff;color:var(--blu);border-radius:9px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+  .pr-slot:hover{background:var(--blu);color:#fff}
+  .pr-slot:disabled{opacity:.4;cursor:not-allowed}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:600;padding:16px}
+  .modal-bg.hidden{display:none}
+  .modal-card{background:#fff;border-radius:16px;max-width:440px;width:100%;padding:22px;max-height:90vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.3)}
+  .pay-opt{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:10px;padding:12px;margin-top:8px;cursor:pointer}
+  .pay-opt.on{border-color:var(--blu);background:#eef4fb}
+  .pay-opt input{margin:0}
+  .pay-opt.dis{opacity:.5;cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -80,6 +106,7 @@
   <div class="tabbar">
     <button class="btn tab-on" id="nv-home" onclick="vai('home')">🏠 Home</button>
     <button class="btn" id="nv-lezioni" onclick="vai('lezioni')">🎓 Lezioni</button>
+    <button class="btn" id="nv-prenota" onclick="vai('prenota')">📅 Prenota</button>
     <button class="btn" id="nv-bacheca" onclick="vai('bacheca')">📣 Bacheca</button>
     <button class="btn" id="nv-chat" onclick="vai('chat')">💬 Chat</button>
     <button class="btn" id="nv-video" onclick="vai('video')">🎥 Videochiamata</button>
@@ -110,6 +137,74 @@
   <div class="card"><h2>Le tue lezioni</h2><p class="muted">Videolezioni e materiali caricati dal tuo docente.</p></div>
   <div id="lezioni-lista"></div>
   <div class="foot">Leone Consulting di Leonardo Angelucci · Velletri (RM)</div>
+</div>
+
+<!-- ====== PRENOTA ====== -->
+<div id="screen-prenota" class="wrap hidden">
+  <div class="card">
+    <h2 style="margin-bottom:4px">📅 Prenota una lezione</h2>
+    <p class="muted" style="margin:0">Scegli uno dei tuoi docenti, guarda le sue disponibilità e prenota lo slot che preferisci. Puoi pagare con le ore del tuo pacchetto oppure con carta/PayPal.</p>
+  </div>
+
+  <!-- vista 1: elenco docenti + filtri -->
+  <div id="pr-view-docenti">
+    <div class="card" id="pr-filtri-card" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <label class="fld" style="flex:1;min-width:150px;margin:0"><span>Materia</span>
+          <select id="pr-f-materia" onchange="renderPrDocenti()"><option value="">Tutte</option></select></label>
+        <label class="fld" style="flex:0 0 120px;margin:0"><span>Livello</span>
+          <select id="pr-f-livello" onchange="renderPrDocenti()">
+            <option value="">Tutti</option><option value="E">Elementari</option><option value="M">Medie</option><option value="S">Superiori</option>
+          </select></label>
+        <label class="fld" id="pr-f-prezzo-wrap" style="flex:0 0 150px;margin:0;display:none"><span>Prezzo max /ora</span>
+          <input id="pr-f-prezzo" type="text" inputmode="decimal" placeholder="es. 25" oninput="renderPrDocenti()"></label>
+      </div>
+    </div>
+    <div id="pr-docenti-lista"><div class="muted">Caricamento…</div></div>
+  </div>
+
+  <!-- vista 2: calendario del docente scelto -->
+  <div id="pr-view-cal" style="display:none">
+    <div class="card" style="display:flex;align-items:center;gap:12px">
+      <button class="btn btn-sm" onclick="prTornaDocenti()">← Docenti</button>
+      <div style="flex:1"><div id="pr-cal-nome" style="font-weight:700"></div><div class="muted" id="pr-cal-sub"></div></div>
+    </div>
+    <div class="card">
+      <div id="pr-cal-box"><div class="muted">Carico le disponibilità…</div></div>
+    </div>
+  </div>
+
+  <!-- Le mie lezioni prenotate -->
+  <div class="card">
+    <h2 style="margin-bottom:8px">📚 Le mie lezioni</h2>
+    <div class="tabbar" style="margin-bottom:12px">
+      <button class="btn btn-sm tab-on" id="mp-prossime" onclick="filtraMieLezioni('prossime')">Prossime</button>
+      <button class="btn btn-sm" id="mp-oggi" onclick="filtraMieLezioni('oggi')">Oggi</button>
+      <button class="btn btn-sm" id="mp-passate" onclick="filtraMieLezioni('passate')">Storico</button>
+      <button class="btn btn-sm" id="mp-cancellate" onclick="filtraMieLezioni('cancellate')">Cancellate</button>
+    </div>
+    <div id="mie-lezioni-lista"><div class="muted">Caricamento…</div></div>
+  </div>
+  <div class="foot">Leone Consulting di Leonardo Angelucci · Velletri (RM)</div>
+</div>
+
+<!-- modale conferma prenotazione -->
+<div id="pr-modal" class="modal-bg hidden">
+  <div class="modal-card">
+    <h2 style="margin:0 0 4px">Conferma prenotazione</h2>
+    <div id="pr-modal-riepilogo" class="muted" style="margin-bottom:8px"></div>
+    <label class="fld" style="margin-top:6px"><span>Durata</span>
+      <select id="pr-durata" onchange="prAggiornaModal()"></select></label>
+    <div style="margin-top:14px;font-size:12.5px;font-weight:600;color:var(--text2)">Come vuoi pagare?</div>
+    <div id="pr-pay-opts"></div>
+    <label class="fld" style="margin-top:12px"><span>Note per il docente (facoltativo)</span>
+      <textarea id="pr-note" placeholder="Es. argomento da ripassare…" style="min-height:52px"></textarea></label>
+    <div id="pr-modal-msg" style="margin-top:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn" style="flex:1" onclick="chiudiPrModal()">Annulla</button>
+      <button class="btn btn-p" style="flex:1" id="pr-modal-conferma" onclick="confermaPrenotazione()">Prenota</button>
+    </div>
+  </div>
 </div>
 
 <!-- ====== BACHECA ====== -->
@@ -336,12 +431,13 @@ async function avvia(session){
 }
 
 // ---- NAV ----
-const _NV=['home','lezioni','bacheca','chat','video','pagamenti']
+const _NV=['home','lezioni','prenota','bacheca','chat','video','pagamenti']
 function vai(t){
   _NV.forEach(x=>{ const b=document.getElementById('nv-'+x); if(b) b.classList.toggle('tab-on', x===t); const sc=document.getElementById('screen-'+x); if(sc) sc.classList.toggle('hidden', x!==t) })
   window.scrollTo({top:0})
   if(t==='home') renderHome()
   if(t==='lezioni') caricaLezioni()
+  if(t==='prenota') aprPrenota()
   if(t==='bacheca') caricaBacheca()
   if(t==='chat') apriChat()
   if(t==='pagamenti') aprPagamentiStu()
@@ -764,6 +860,369 @@ function _lvOnTyping(payload){
   const ty=document.getElementById('lv-typing'); if(!ty) return
   ty.textContent='✍️ '+(payload.nome||'L\u0027altro partecipante')+' sta scrivendo…'
   clearTimeout(_lvTypingHideTimer); _lvTypingHideTimer=setTimeout(function(){ ty.textContent='' },2200)
+}
+
+// ==================================================================
+// ============ PRENOTA LEZIONE (marketplace lato studente) =========
+// ==================================================================
+const PR_GIORNI_AVANTI=21          // orizzonte prenotabile
+const PR_PREAVVISO_H=12            // niente slot che iniziano tra meno di 12h
+let _PR_DOC_CUR=null               // docente selezionato per il calendario
+let _PR_SLOTS={}                   // { 'YYYY-MM-DD': Set(oreLibere) }
+let _MIE_LEZIONI=[]                // le mie prenotazioni
+let _MP_FILTER='prossime'
+let _PR_SEL=null                   // { docId, dateISO(YYYY-MM-DD), ora }
+
+function _prHour(v){
+  if(v==null) return NaN
+  if(typeof v==='number') return Math.floor(v)
+  const s=String(v).trim()
+  if(s.indexOf(':')>=0) return parseInt(s.split(':')[0],10)
+  const n=parseInt(s,10); return isNaN(n)?NaN:n
+}
+function _prLink(docId){
+  const arr=(MIO_S&&Array.isArray(MIO_S.docenti))?MIO_S.docenti:[]
+  return arr.find(x=>x&&String(x.docenteId)===String(docId)) || null
+}
+function _prMateriaLink(docId){ const l=_prLink(docId); return (l&&l.materia)||'' }
+function _prLivelliDoc(d){
+  // preferisco i livelli associati alla materia; fallback ai livelli generali del docente
+  const out=new Set()
+  if(Array.isArray(d.materie)) d.materie.forEach(m=>{ if(m&&Array.isArray(m.livelli)) m.livelli.forEach(x=>out.add(x)) })
+  if(!out.size && Array.isArray(d.livelli)) d.livelli.forEach(x=>out.add(x))
+  const l=_prLink(d._id); if(l&&Array.isArray(l.livelli)) l.livelli.forEach(x=>out.add(x))
+  return [...out]
+}
+function _prPrezzoOra(d){ const p=(d&&(d.prezzoOra!=null?d.prezzoOra:(d.tariffaOra!=null?d.tariffaOra:null))); const n=Number(p); return (p!=null&&p!==''&&!isNaN(n))?n:null }
+function _prResidueBase(docId){ const l=_prLink(docId); if(!l) return 0; return Math.max(0,(Number(l.oreTot)||0)-(Number(l.oreFatte)||0)) }
+function _prOreImpegnate(docId){
+  // ore già "prenotate e pagate col pacchetto" per lezioni future confermate → per non sforare il residuo
+  const now=Date.now()
+  return (_MIE_LEZIONI||[]).filter(l=>String(l.docente_id)===String(docId)
+      && String(l.stato||'')==='confermata'
+      && new Date(l.inizio).getTime()>now
+      && l.metodo_pagamento==='ore_pacchetto')
+    .reduce((s,l)=>s+Math.max(0,(new Date(l.fine)-new Date(l.inizio))/3600000),0)
+}
+function _prResidueReali(docId){ return Math.max(0, _prResidueBase(docId) - _prOreImpegnate(docId)) }
+function _prIniziali(nome){ return (nome||'?').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?' }
+function _prISO(dt){ const y=dt.getFullYear(), m=('0'+(dt.getMonth()+1)).slice(-2), d=('0'+dt.getDate()).slice(-2); return y+'-'+m+'-'+d }
+function _eurPR(n){ n=Number(n); return isNaN(n)?'—':(n.toFixed(2).replace('.',',')+' €') }
+
+async function aprPrenota(){
+  // popolo i filtri (una volta)
+  const selM=document.getElementById('pr-f-materia')
+  if(selM && selM.options.length<=1){
+    const mset=new Set(); (MIEI_DOCENTI||[]).forEach(d=>{ const m=_prMateriaLink(d._id); if(m) mset.add(m) })
+    selM.innerHTML='<option value="">Tutte</option>'+[...mset].sort().map(m=>'<option value="'+esc(m)+'">'+esc(m)+'</option>').join('')
+  }
+  // mostro filtro prezzo solo se almeno un docente ha un prezzo/ora impostato
+  const anyPrice=(MIEI_DOCENTI||[]).some(d=>_prPrezzoOra(d)!=null)
+  const fc=document.getElementById('pr-filtri-card'); if(fc) fc.style.display=(MIEI_DOCENTI&&MIEI_DOCENTI.length)?'':'none'
+  const pw=document.getElementById('pr-f-prezzo-wrap'); if(pw) pw.style.display=anyPrice?'':'none'
+  prTornaDocenti()
+  renderPrDocenti()
+  await caricaMieLezioni()
+}
+
+function renderPrDocenti(){
+  const box=document.getElementById('pr-docenti-lista'); if(!box) return
+  if(!MIEI_DOCENTI||!MIEI_DOCENTI.length){
+    box.innerHTML='<div class="card"><div class="empty">Non hai ancora un docente collegato. Appena Leone Consulting ti assegna un docente potrai prenotare le lezioni da qui.</div></div>'; return
+  }
+  const fM=(document.getElementById('pr-f-materia')||{}).value||''
+  const fL=(document.getElementById('pr-f-livello')||{}).value||''
+  const fPraw=((document.getElementById('pr-f-prezzo')||{}).value||'').replace(',','.').trim()
+  const fP=fPraw?Number(fPraw):null
+  const list=(MIEI_DOCENTI||[]).filter(d=>{
+    const mat=_prMateriaLink(d._id)
+    if(fM && mat!==fM) return false
+    if(fL){ const lv=_prLivelliDoc(d); if(lv.length && !lv.includes(fL)) return false }
+    if(fP!=null && !isNaN(fP)){ const p=_prPrezzoOra(d); if(p!=null && p>fP) return false }
+    return true
+  })
+  if(!list.length){ box.innerHTML='<div class="card"><div class="empty">Nessun docente corrisponde ai filtri scelti.</div></div>'; return }
+  box.innerHTML=list.map(d=>{
+    const mat=_prMateriaLink(d._id), lv=_prLivelliDoc(d)
+    const lvTxt=lv.map(x=>({E:'Elementari',M:'Medie',S:'Superiori'}[x]||x)).join(' · ')
+    const res=_prResidueReali(d._id)
+    const prezzo=_prPrezzoOra(d)
+    const chips=[ mat?('<span class="chip">📘 '+esc(mat)+'</span>'):'',
+                  lvTxt?('<span class="chip">'+esc(lvTxt)+'</span>'):'',
+                  '<span class="chip">🎟 '+ (res>0?(res+' ore residue'):'nessuna ora residua') +'</span>',
+                  prezzo!=null?('<span class="chip">💶 '+_eurPR(prezzo)+'/ora</span>'):'' ].filter(Boolean).join(' ')
+    return '<div class="pr-doc">'+
+      '<div style="display:flex;gap:12px;align-items:flex-start;flex:1;min-width:200px">'+
+        '<div class="av">'+esc(_prIniziali(d.nome))+'</div>'+
+        '<div style="flex:1"><div style="font-weight:700">'+esc(d.nome||'Docente')+'</div>'+
+          '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">'+chips+'</div></div>'+
+      '</div>'+
+      '<button class="btn btn-p btn-sm" onclick="prApriCalendario(\''+d._id+'\')">Vedi disponibilità →</button>'+
+    '</div>'
+  }).join('')
+}
+
+function prTornaDocenti(){
+  document.getElementById('pr-view-docenti').style.display=''
+  document.getElementById('pr-view-cal').style.display='none'
+  _PR_DOC_CUR=null
+}
+
+async function prApriCalendario(docId){
+  const d=(MIEI_DOCENTI||[]).find(x=>String(x._id)===String(docId)); if(!d) return
+  _PR_DOC_CUR=d
+  document.getElementById('pr-view-docenti').style.display='none'
+  document.getElementById('pr-view-cal').style.display=''
+  document.getElementById('pr-cal-nome').textContent=d.nome||'Docente'
+  const mat=_prMateriaLink(docId), res=_prResidueReali(docId)
+  document.getElementById('pr-cal-sub').textContent=[mat, (res>0?res+' ore residue nel pacchetto':'nessuna ora residua')].filter(Boolean).join(' · ')
+  const box=document.getElementById('pr-cal-box'); box.innerHTML='<div class="muted">Carico le disponibilità…</div>'
+  try{
+    const disp=await _prCaricaDisponibilita(docId)
+    _PR_SLOTS=_prCalcSlots(disp)
+    renderPrCal()
+  }catch(e){ box.innerHTML='<div class="msg msg-err">Non riesco a leggere le disponibilità: '+esc((e&&e.message)||e)+'</div>' }
+}
+
+async function _prCaricaDisponibilita(docId){
+  // ricorrenti
+  let ric=[]
+  try{ const r=await db.from('docenti_disponibilita').select('giorno_settimana,ora_inizio,ora_fine,attivo,valido_dal,valido_al').eq('docente_id',docId)
+       if(!r.error) ric=(r.data||[]).filter(x=>x.attivo!==false) }catch(e){}
+  // eccezioni (da oggi in poi)
+  const oggi=new Date().toISOString().slice(0,10)
+  let ecc=[]
+  try{ const r=await db.from('docenti_eccezioni').select('data,tipo,ora_inizio,ora_fine').eq('docente_id',docId).gte('data',oggi)
+       if(!r.error) ecc=r.data||[] }catch(e){}
+  // slot già occupati (solo orari, niente dati di altri studenti)
+  let busy=[]
+  try{ const r=await db.from('lezioni_prenotate').select('inizio,fine,stato').eq('docente_id',docId).gte('inizio',oggi)
+       if(!r.error) busy=(r.data||[]).filter(x=>String(x.stato||'').indexOf('cancellata')<0) }catch(e){}
+  return { ric, ecc, busy }
+}
+
+function _prCalcSlots(disp){
+  const out={}, now=Date.now(), limite=now+PR_PREAVVISO_H*3600000
+  const ricRows=(disp.ric||[]).map(r=>({ gs:Number(r.giorno_settimana), oi:_prHour(r.ora_inizio), of:_prHour(r.ora_fine), dal:r.valido_dal||null, al:r.valido_al||null }))
+                              .filter(r=>!isNaN(r.oi)&&!isNaN(r.of)&&r.of>r.oi)
+  const eccByDate={}
+  ;(disp.ecc||[]).forEach(e=>{ (eccByDate[e.data]=eccByDate[e.data]||[]).push(e) })
+  for(let i=0;i<PR_GIORNI_AVANTI;i++){
+    const day=new Date(); day.setHours(0,0,0,0); day.setDate(day.getDate()+i)
+    const iso=_prISO(day)
+    const wd=day.getDay()
+    const ore=new Set()
+    // 1) ricorrenti del giorno (rispettando la finestra di validità)
+    ricRows.forEach(r=>{ if(r.gs!==wd) return; if(r.dal && iso<r.dal) return; if(r.al && iso>r.al) return; for(let h=r.oi;h<r.of;h++) ore.add(h) })
+    // 2) eccezioni del giorno
+    const ex=eccByDate[iso]||[]
+    let chiusoTutto=false
+    ex.forEach(e=>{
+      if(e.tipo==='aperto'){ const oi=_prHour(e.ora_inizio), of=_prHour(e.ora_fine); if(!isNaN(oi)&&!isNaN(of)) for(let h=oi;h<of;h++) ore.add(h) }
+      else if(e.tipo==='chiuso'){
+        const oi=_prHour(e.ora_inizio), of=_prHour(e.ora_fine)
+        if(!isNaN(oi)&&!isNaN(of)){ for(let h=oi;h<of;h++) ore.delete(h) }
+        else chiusoTutto=true
+      }
+    })
+    if(chiusoTutto){ continue }
+    // 3) rimuovo occupati e orari passati / < preavviso
+    const liberi=[...ore].filter(h=>{
+      const t=new Date(day); t.setHours(h,0,0,0)
+      if(t.getTime()<limite) return false
+      const t2=new Date(t.getTime()+3600000)
+      const occ=(disp.busy||[]).some(b=>{ const bi=new Date(b.inizio).getTime(), bf=new Date(b.fine).getTime(); return bi<t2.getTime() && bf>t.getTime() })
+      return !occ
+    }).sort((a,b)=>a-b)
+    if(liberi.length) out[iso]=new Set(liberi)
+  }
+  return out
+}
+
+function renderPrCal(){
+  const box=document.getElementById('pr-cal-box'); if(!box) return
+  const giorni=Object.keys(_PR_SLOTS).sort()
+  if(!giorni.length){ box.innerHTML='<div class="empty">Nessuno slot disponibile nei prossimi giorni. Riprova più avanti o scrivi al docente in chat.</div>'; return }
+  box.innerHTML=giorni.map(iso=>{
+    const d=new Date(iso+'T00:00:00')
+    const tit=d.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'})
+    const ore=[..._PR_SLOTS[iso]].sort((a,b)=>a-b)
+    const slots=ore.map(h=>{ const hh=('0'+h).slice(-2); return '<button class="pr-slot" onclick="apriPrModal(\''+iso+'\','+h+')">'+hh+':00</button>' }).join('')
+    return '<div class="pr-day">'+esc(tit)+'</div><div class="pr-slots">'+slots+'</div>'
+  }).join('')
+}
+
+// ---- modale conferma ----
+function apriPrModal(iso, ora){
+  if(!_PR_DOC_CUR) return
+  _PR_SEL={ docId:_PR_DOC_CUR._id, dateISO:iso, ora:ora }
+  // durata max = ore consecutive libere (max 3)
+  const set=_PR_SLOTS[iso]||new Set()
+  let maxDur=0; for(let k=0;k<3;k++){ if(set.has(ora+k)) maxDur++; else break }
+  const durSel=document.getElementById('pr-durata')
+  durSel.innerHTML=''
+  for(let n=1;n<=maxDur;n++){ durSel.innerHTML+='<option value="'+n+'">'+n+' ora'+(n>1?'e':'')+'</option>' }
+  document.getElementById('pr-note').value=''
+  document.getElementById('pr-modal-msg').innerHTML=''
+  document.getElementById('pr-modal').classList.remove('hidden')
+  prAggiornaModal()
+}
+function chiudiPrModal(){ document.getElementById('pr-modal').classList.add('hidden'); _PR_SEL=null }
+
+function prAggiornaModal(){
+  if(!_PR_SEL) return
+  const d=_PR_DOC_CUR
+  const dur=Number(document.getElementById('pr-durata').value||1)
+  const iso=_PR_SEL.dateISO, ora=_PR_SEL.ora
+  const dd=new Date(iso+'T00:00:00'); dd.setHours(ora,0,0,0)
+  const fine=new Date(dd.getTime()+dur*3600000)
+  const dataStr=dd.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'})
+  const oraStr=('0'+ora).slice(-2)+':00 → '+('0'+fine.getHours()).slice(-2)+':00'
+  document.getElementById('pr-modal-riepilogo').innerHTML='<b>'+esc(d.nome||'Docente')+'</b> · '+esc(_prMateriaLink(d._id)||'lezione')+'<br>'+esc(dataStr)+' · '+esc(oraStr)
+  // opzioni pagamento
+  const res=_prResidueReali(d._id)
+  const prezzo=_prPrezzoOra(d)
+  const importo=prezzo!=null?(prezzo*dur):null
+  const oreOk=res>=dur
+  const box=document.getElementById('pr-pay-opts')
+  box.innerHTML=
+    '<label class="pay-opt'+(oreOk?'':' dis')+'" id="po-ore"><input type="radio" name="prpay" value="ore_pacchetto" '+(oreOk?'checked':'disabled')+' onchange="_prPaySel()">'+
+      '<span>🎟 <b>Ore del pacchetto</b><br><span class="muted">'+(oreOk?('Usi '+dur+' ora'+(dur>1?'e':'')+' delle '+res+' residue'):'Ore residue insufficienti ('+res+')')+'</span></span></label>'+
+    '<label class="pay-opt" id="po-sumup"><input type="radio" name="prpay" value="sumup" '+(oreOk?'':'checked')+' onchange="_prPaySel()">'+
+      '<span>💳 <b>Carta (SumUp)</b>'+(importo!=null?'<br><span class="muted">'+_eurPR(importo)+'</span>':'')+'</span></label>'+
+    '<label class="pay-opt" id="po-paypal"><input type="radio" name="prpay" value="paypal" onchange="_prPaySel()">'+
+      '<span>🅿️ <b>PayPal</b>'+(importo!=null?'<br><span class="muted">'+_eurPR(importo)+'</span>':'')+'</span></label>'
+  _prPaySel()
+}
+function _prPaySel(){
+  const v=(document.querySelector('input[name="prpay"]:checked')||{}).value
+  document.querySelectorAll('#pr-pay-opts .pay-opt').forEach(el=>{ const inp=el.querySelector('input'); el.classList.toggle('on', inp&&inp.checked) })
+  const mt=(v==='ore_pacchetto')?'Prenota':'Prenota e paga'
+  document.getElementById('pr-modal-conferma').textContent=mt
+}
+
+async function confermaPrenotazione(){
+  if(!_PR_SEL) return
+  const d=_PR_DOC_CUR
+  const dur=Number(document.getElementById('pr-durata').value||1)
+  const pay=(document.querySelector('input[name="prpay"]:checked')||{}).value||'sumup'
+  const note=(document.getElementById('pr-note').value||'').trim()
+  const iso=_PR_SEL.dateISO, ora=_PR_SEL.ora
+  const inizio=new Date(iso+'T00:00:00'); inizio.setHours(ora,0,0,0)
+  const fine=new Date(inizio.getTime()+dur*3600000)
+  const msg=document.getElementById('pr-modal-msg'); const btn=document.getElementById('pr-modal-conferma')
+  // guardia ore residue lato client
+  if(pay==='ore_pacchetto' && _prResidueReali(d._id)<dur){ msg.innerHTML='<div class="msg msg-err">Ore residue insufficienti.</div>'; return }
+  const prezzo=_prPrezzoOra(d); const importo=prezzo!=null?(prezzo*dur):null
+  btn.disabled=true; const _t=btn.textContent; btn.textContent='Prenoto…'
+  try{
+    const row={
+      docente_id:d._id,
+      studente_id:(MIO_S&&MIO_S._id)||null,
+      inizio:inizio.toISOString(), fine:fine.toISOString(),
+      materia:_prMateriaLink(d._id)||null,
+      livello:((document.getElementById('pr-f-livello')||{}).value)|| (( _prLivelliDoc(d)[0])||null),
+      stato:'confermata',
+      note_studente:note||null,
+      metodo_pagamento:pay,                 // 'ore_pacchetto' | 'sumup' | 'paypal'
+      prezzo_lezione:(pay==='ore_pacchetto'?null:importo)
+    }
+    const ins=await db.from('lezioni_prenotate').insert(row).select().single()
+    if(ins.error) throw ins.error
+    const lid=ins.data&&ins.data.id
+    try{ await db.from('lezioni_storico').insert({ lezione_id:lid, azione:'creata', eseguita_da:'studente', eseguita_da_id:(MIO_S&&MIO_S._id)||null, dati:{ pagamento:pay, ore:dur } }) }catch(e){}
+    // aggiorno stato locale
+    await caricaMieLezioni()
+    if(pay==='ore_pacchetto'){
+      msg.innerHTML='<div class="msg msg-ok">Lezione prenotata ✓ Coperta dalle ore del tuo pacchetto.</div>'
+      setTimeout(()=>{ chiudiPrModal(); prApriCalendario(d._id) }, 1200)
+    } else {
+      // pagamento carta/PayPal: la lezione è registrata come "da pagare".
+      msg.innerHTML='<div class="msg msg-ok" style="margin-bottom:8px">Lezione prenotata ✓ Ora completa il pagamento'+(importo!=null?(' di <b>'+_eurPR(importo)+'</b>'):'')+' dalla sezione Pagamenti. Leone Consulting confermerà la lezione al ricevimento.</div>'+
+        '<button class="btn btn-p btn-sm" onclick="chiudiPrModal();vai(\'pagamenti\')">Vai ai pagamenti →</button>'
+    }
+  }catch(e){
+    const em=(e&&e.message)||String(e)
+    msg.innerHTML='<div class="msg msg-err">Errore prenotazione: '+esc(em)+'</div>'
+  }
+  btn.disabled=false; btn.textContent=_t
+}
+
+// ---- Le mie lezioni ----
+async function caricaMieLezioni(){
+  const box=document.getElementById('mie-lezioni-lista'); if(box && !_MIE_LEZIONI.length) box.innerHTML='<div class="muted">Caricamento…</div>'
+  if(!MIO_S||!MIO_S._id){ _MIE_LEZIONI=[]; renderMieLezioni(); return }
+  try{
+    const r=await db.from('lezioni_prenotate').select('*').eq('studente_id',MIO_S._id).order('inizio',{ascending:true})
+    _MIE_LEZIONI = r.error ? [] : (r.data||[])
+  }catch(e){ _MIE_LEZIONI=[] }
+  renderMieLezioni()
+}
+function filtraMieLezioni(f){
+  _MP_FILTER=f
+  ;['prossime','oggi','passate','cancellate'].forEach(x=>{ const b=document.getElementById('mp-'+x); if(b) b.classList.toggle('tab-on', x===f) })
+  renderMieLezioni()
+}
+function _docNome(docId){ const d=(MIEI_DOCENTI||[]).find(x=>String(x._id)===String(docId)); return d?(d.nome||'Docente'):'Docente' }
+function renderMieLezioni(){
+  const box=document.getElementById('mie-lezioni-lista'); if(!box) return
+  const now=Date.now(), oggi=new Date().toDateString()
+  let list=(_MIE_LEZIONI||[]).slice()
+  if(_MP_FILTER==='cancellate') list=list.filter(l=>String(l.stato||'').indexOf('cancellata')===0)
+  else if(_MP_FILTER==='oggi') list=list.filter(l=>new Date(l.inizio).toDateString()===oggi && String(l.stato||'').indexOf('cancellata')<0)
+  else if(_MP_FILTER==='passate') list=list.filter(l=>new Date(l.fine).getTime()<now && String(l.stato||'').indexOf('cancellata')<0)
+  else list=list.filter(l=>new Date(l.fine).getTime()>=now && String(l.stato||'').indexOf('cancellata')<0)
+  if(!list.length){ box.innerHTML='<div class="empty">Nessuna lezione in questa vista.</div>'; return }
+  box.innerHTML=list.map(l=>{
+    const d1=new Date(l.inizio), d2=new Date(l.fine)
+    const dataStr=d1.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'})
+    const oraStr=d1.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})+' → '+d2.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})
+    const stato=l.stato||'confermata'
+    let badge
+    if(stato==='svolta') badge='<span class="badge bg">Svolta</span>'
+    else if(stato.indexOf('cancellata')===0) badge='<span class="badge br">'+esc(stato==='cancellata_docente'?'Cancellata dal docente':(stato==='cancellata_studente'?'Cancellata da te':stato.replace('_',' ')))+'</span>'
+    else badge='<span class="badge bb">Confermata</span>'
+    const metodo=l.metodo_pagamento||''
+    let payBadge=''
+    if(metodo==='ore_pacchetto') payBadge='<span class="chip">🎟 Pacchetto</span>'
+    else if((metodo==='sumup'||metodo==='paypal') && !l.pagamento_id) payBadge='<span class="badge ba">Da pagare</span>'
+    else if(metodo) payBadge='<span class="chip">'+esc(metodo==='paypal'?'PayPal':'Carta')+'</span>'
+    // azioni
+    let az=''
+    if(stato==='confermata'){
+      const oreMancanti=(d1.getTime()-now)/3600000
+      if(d1.getTime()>now){
+        if(oreMancanti>=PR_PREAVVISO_H) az='<button class="btn btn-sm" onclick="cancellaMiaLezione(\''+l.id+'\')" style="color:var(--red)">Cancella</button>'
+        else az='<span class="muted" style="font-size:11px">Preavviso &lt;12h: contatta il docente in chat per spostarla</span>'
+      }
+    }
+    const materia=l.materia?(' · '+esc(l.materia)):''
+    return '<div class="card" style="padding:14px;margin:0 0 10px">'+
+      '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">'+
+        '<div style="flex:1;min-width:180px"><div style="font-weight:700">'+esc(_docNome(l.docente_id))+materia+'</div>'+
+          '<div style="font-size:13px;color:var(--text2);margin-top:2px;text-transform:capitalize">'+esc(dataStr)+'</div>'+
+          '<div style="font-size:13px;color:var(--text2)">'+esc(oraStr)+'</div>'+
+          (l.note_studente?'<div style="font-size:12px;color:var(--text3);margin-top:6px;font-style:italic">"'+esc(l.note_studente)+'"</div>':'')+
+          (payBadge?'<div style="margin-top:8px">'+payBadge+'</div>':'')+
+        '</div>'+
+        '<div style="text-align:right">'+badge+'</div>'+
+      '</div>'+
+      (az?'<div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+az+'</div>':'')+
+    '</div>'
+  }).join('')
+}
+async function cancellaMiaLezione(id){
+  const l=(_MIE_LEZIONI||[]).find(x=>String(x.id)===String(id)); if(!l) return
+  const oreMancanti=(new Date(l.inizio).getTime()-Date.now())/3600000
+  if(oreMancanti<PR_PREAVVISO_H){ alert('Mancano meno di 12 ore alla lezione: non è più possibile cancellarla dal portale. Contatta il tuo docente in chat.'); return }
+  if(!confirm('Vuoi cancellare questa lezione? Il docente verrà avvisato. Nessuna penale se cancelli con almeno 12 ore di preavviso.')) return
+  try{
+    const r=await db.from('lezioni_prenotate').update({ stato:'cancellata_studente', updated_at:new Date().toISOString() }).eq('id',id)
+    if(r.error) throw r.error
+    try{ await db.from('lezioni_storico').insert({ lezione_id:id, azione:'cancellata', eseguita_da:'studente', eseguita_da_id:(MIO_S&&MIO_S._id)||null, dati:{ motivo:'cancellazione studente' } }) }catch(e){}
+    await caricaMieLezioni()
+    if(_PR_DOC_CUR){ try{ await prApriCalendario(_PR_DOC_CUR._id) }catch(e){} }
+  }catch(e){ alert('Errore: '+((e&&e.message)||e)) }
 }
 
 // ---- avvio ----
