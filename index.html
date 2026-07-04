@@ -94,6 +94,10 @@
     <p class="muted" id="ho-email"></p>
     <div id="ho-dati" style="margin-top:10px;font-size:14px;line-height:1.7"></div>
   </div>
+  <div class="card" id="ho-contratto-card" style="display:none">
+    <h2>📋 Il tuo contratto</h2>
+    <div id="ho-contratto-box"></div>
+  </div>
   <div class="card">
     <h2>Il tuo docente</h2>
     <div id="ho-docente" class="muted">—</div>
@@ -238,6 +242,28 @@ async function loadCfgPortale(){ try{ const ri=await db.from('impostazioni').sel
 loadCfgPortale()
 
 let MIO_S=null, MIO_EMAIL='', MIO_DOC=null, MIEI_DOCENTI=[], _chatSub=null
+function _renderContrattoStu(c){
+  const box=document.getElementById('ho-contratto-card'); const inner=document.getElementById('ho-contratto-box')
+  if(!box||!inner) return
+  if(!c || !c.fine){ box.style.display='none'; return }
+  box.style.display='block'
+  const oggi=new Date(); oggi.setHours(0,0,0,0)
+  const fine=new Date(c.fine+'T00:00:00')
+  const gg=Math.floor((fine.getTime()-oggi.getTime())/86400000)
+  let alertBox=''
+  if(gg<0){ alertBox='<div style="padding:10px 12px;border-radius:8px;margin-bottom:10px;background:#fee;color:#c0392b;border:1px solid #f5c6cb;font-size:13px">\u26a0\ufe0f <strong>Contratto scaduto</strong> il '+fine.toLocaleDateString('it-IT')+'. Contatta Leone Consulting per il rinnovo.</div>' }
+  else if(gg<=30){ alertBox='<div style="padding:10px 12px;border-radius:8px;margin-bottom:10px;background:#fff3cd;color:#856404;border:1px solid #ffeaa7;font-size:13px">\u26a0\ufe0f <strong>Contratto in scadenza</strong>: mancano '+gg+' giorni. Contatta Leone Consulting per il rinnovo.</div>' }
+  const inizio = c.inizio ? new Date(c.inizio+'T00:00:00').toLocaleDateString('it-IT') : '\u2014'
+  const fineStr = fine.toLocaleDateString('it-IT')
+  const rin = (c.rinnovi||[])
+  let rinHtml=''
+  if(rin.length){
+    rinHtml='<div style="margin-top:12px"><div style="font-weight:600;font-size:13px;color:var(--text2);margin-bottom:6px">Rinnovi effettuati</div>'
+    rin.forEach((r,i)=>{ const dt=r.data||'\u2014'; const l=r.pdf_path?(' \u00b7 <a href="'+SUPA_URL+'/storage/v1/object/public/contratti/'+esc(r.pdf_path)+'" target="_blank" style="color:var(--blu);text-decoration:none">\ud83d\udcc4 PDF</a>'):''; rinHtml+='<div style="padding:5px 10px;background:var(--surface2);border-radius:6px;margin-bottom:4px;font-size:12px">Rinnovo #'+(i+1)+' \u00b7 '+esc(dt)+l+'</div>' })
+    rinHtml+='</div>'
+  }
+  inner.innerHTML=alertBox+'<div style="display:flex;gap:20px;flex-wrap:wrap"><div><div style="font-size:11px;color:var(--text2)">Data inizio</div><div style="font-weight:600">'+inizio+'</div></div><div><div style="font-size:11px;color:var(--text2)">Valido fino a</div><div style="font-weight:600">'+fineStr+'</div></div><div><div style="font-size:11px;color:var(--text2)">Rinnovi</div><div style="font-weight:600">'+rin.length+'</div></div></div>'+rinHtml
+}
 let _presChan=null, _sonoPronto=false, _chiamataRoom=null
 
 function esc(s){ return (''+(s==null?'':s)).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])) }
@@ -327,6 +353,7 @@ function renderHome(){
   const s=MIO_S||{}
   document.getElementById('ho-ciao').textContent='Ciao, '+((s.nome||'').split(' ')[0]||'studente')+'! 👋'
   document.getElementById('ho-email').textContent=MIO_EMAIL
+  _renderContrattoStu(s.contratto||{})
   const righe=[]
   if(s.livello) righe.push('<b>Grado:</b> '+esc(s.livello))
   if(s.classe) righe.push('<b>Classe:</b> '+esc(s.classe))
