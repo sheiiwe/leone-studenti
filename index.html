@@ -283,6 +283,7 @@
         <option value="sumup">Carta di credito/debito (SumUp)</option>
         <option value="paypal">PayPal</option>
         <option value="contanti">💵 Contanti (in sede)</option>
+        <option value="bonifico">🏦 Bonifico</option>
       </select>
     </label>
     <button class="btn btn-p" id="pg-btn-gen" onclick="genPagamentoStu()" style="width:100%;margin-top:10px">Genera link di pagamento</button>
@@ -661,20 +662,21 @@ async function genPagamentoStu(){
   const p=_PROD_STU.find(x=>String(x.id)===String(sel.value)); if(!p){ msg.innerHTML='<div class="msg msg-err">Corso non valido.</div>'; return }
   const cli={ nome:(MIO_S&&MIO_S.nome)||'', email:MIO_EMAIL||'', tel:(MIO_S&&MIO_S.tel)||'' }
   btn.disabled=true; const _t=btn.innerHTML; btn.innerHTML='Genero link…'
-  // --- Pagamento in contanti: crea una richiesta "in attesa di conferma" (niente link) ---
-  if(metodo==='contanti'){
+  // --- Contanti / Bonifico: crea una richiesta "in attesa di conferma" (niente link) ---
+  if(metodo==='contanti'||metodo==='bonifico'){
+    const nomeMet=metodo==='bonifico'?'bonifico':'contanti'
     btn.innerHTML='Invio richiesta…'
     try{
       const imp=Number(p.prezzo||p.prezzo_pieno||p.importo||0)||0
       const r=await db.from('pagamenti').insert({
         prodotto_id:p.id, prodotto_nome:p.nome||'Corso',
         prezzo_pieno:imp, importo_pagato:imp,
-        area:'stud', metodo:'contanti', stato:'attesa_contanti',
+        area:'stud', metodo:metodo, stato:'attesa_contanti',
         studente_id:(MIO_S&&MIO_S._id)||null,
         venditore_nome:cli.nome, cliente_nome:cli.nome, cliente_email:cli.email, cliente_tel:cli.tel
       }).select().single()
       if(r.error) throw r.error
-      msg.innerHTML='<div class="msg msg-ok">Richiesta di pagamento in contanti inviata ✓ Leone Consulting la confermerà al ricevimento del contante. Lo trovi nello storico come <b>“Contanti da confermare”</b>.</div>'
+      msg.innerHTML='<div class="msg msg-ok">Richiesta di pagamento in '+nomeMet+' inviata ✓ Leone Consulting la confermerà al ricevimento. La trovi nello storico come <b>“da confermare”</b>.</div>'
       setTimeout(_caricaStoricoPagStu, 800)
     }catch(e){ msg.innerHTML='<div class="msg msg-err">Errore: '+esc((e&&e.message)||e)+'</div>' }
     btn.disabled=false; btn.innerHTML=_t; return
@@ -711,7 +713,7 @@ async function _caricaStoricoPagStu(){
   box.innerHTML='<table class="tbl"><thead><tr><th>Data</th><th>Corso</th><th>Importo</th><th>Pagamento</th><th>Fattura</th></tr></thead><tbody>'+_PAG_STU.map(p=>{
     const d=(p.created_at||'').slice(0,10)
     const stato=(p.stato||'').toLowerCase()
-    const bp = stato==='paid'||stato==='pagato' ? '<span class="badge bg">Pagato</span>' : (stato==='attesa_contanti'?'<span class="badge ba">Contanti da confermare</span>':(stato==='failed'?'<span class="badge br">Fallito</span>':'<span class="badge ba">In attesa</span>'))
+    const bp = stato==='paid'||stato==='pagato' ? '<span class="badge bg">Pagato</span>' : (stato==='attesa_contanti'?'<span class="badge ba">'+((p.metodo==='bonifico')?'Bonifico':'Contanti')+' da confermare</span>':(stato==='failed'?'<span class="badge br">Fallito</span>':'<span class="badge ba">In attesa</span>'))
     let bf='—'
     if(p.fattura_pdf_path){ bf='<span class="badge bg">Emessa</span> <a href="'+SUPA_URL+'/storage/v1/object/public/contratti/'+esc(p.fattura_pdf_path)+'" target="_blank" rel="noopener" style="margin-left:4px;text-decoration:none">📄 PDF</a>' }
     else if(p.fattura_fic_id){ bf='<span class="badge ba">In fase di erogazione</span>' }
@@ -1112,7 +1114,9 @@ function prAggiornaModal(){
     '<label class="pay-opt" id="po-paypal"><input type="radio" name="prpay" value="paypal" onchange="_prPaySel()">'+
       '<span>🅿️ <b>PayPal</b>'+(importo!=null?'<br><span class="muted">'+_eurPR(importo)+'</span>':'')+'</span></label>'+
     '<label class="pay-opt" id="po-contanti"><input type="radio" name="prpay" value="contanti" onchange="_prPaySel()">'+
-      '<span>💵 <b>Contanti (in sede)</b><br><span class="muted">Da confermare da Leone Consulting'+(importo!=null?' · '+_eurPR(importo):'')+'</span></span></label>'
+      '<span>💵 <b>Contanti (in sede)</b><br><span class="muted">Da confermare da Leone Consulting'+(importo!=null?' · '+_eurPR(importo):'')+'</span></span></label>'+
+    '<label class="pay-opt" id="po-bonifico"><input type="radio" name="prpay" value="bonifico" onchange="_prPaySel()">'+
+      '<span>🏦 <b>Bonifico</b><br><span class="muted">Da confermare da Leone Consulting'+(importo!=null?' · '+_eurPR(importo):'')+'</span></span></label>'
   _prPaySel()
 }
 function _prPaySel(){
@@ -1137,13 +1141,13 @@ async function confermaPrenotazione(){
   const prezzo=_prPrezzoOra(d); const importo=prezzo!=null?(prezzo*dur):null
   btn.disabled=true; const _t=btn.textContent; btn.textContent='Prenoto…'
   try{
-    // pagamento in contanti: creo prima la richiesta "in attesa di conferma"
+    // pagamento in contanti/bonifico: creo prima la richiesta "in attesa di conferma"
     let pagId=null
-    if(pay==='contanti'){
+    if(pay==='contanti'||pay==='bonifico'){
       const rp=await db.from('pagamenti').insert({
         prodotto_nome:'Lezione '+(_prMateriaLink(d._id)||'')+' · '+(d.nome||''),
         prezzo_pieno:importo||0, importo_pagato:importo||0,
-        area:'stud', metodo:'contanti', stato:'attesa_contanti',
+        area:'stud', metodo:pay, stato:'attesa_contanti',
         studente_id:(MIO_S&&MIO_S._id)||null,
         venditore_nome:(MIO_S&&MIO_S.nome)||'', cliente_nome:(MIO_S&&MIO_S.nome)||'', cliente_email:MIO_EMAIL||''
       }).select().single()
@@ -1171,8 +1175,9 @@ async function confermaPrenotazione(){
     if(pay==='ore_pacchetto'){
       msg.innerHTML='<div class="msg msg-ok">Lezione prenotata ✓ Coperta dalle ore del tuo pacchetto.</div>'
       setTimeout(()=>{ chiudiPrModal(); prApriCalendario(d._id) }, 1200)
-    } else if(pay==='contanti'){
-      msg.innerHTML='<div class="msg msg-ok">Lezione prenotata ✓ Pagamento in <b>contanti in attesa di conferma</b> da parte di Leone Consulting'+(importo!=null?(' ('+_eurPR(importo)+')'):'')+'.</div>'
+    } else if(pay==='contanti'||pay==='bonifico'){
+      const nm=pay==='bonifico'?'bonifico':'contanti'
+      msg.innerHTML='<div class="msg msg-ok">Lezione prenotata ✓ Pagamento in <b>'+nm+' in attesa di conferma</b> da parte di Leone Consulting'+(importo!=null?(' ('+_eurPR(importo)+')'):'')+'.</div>'
       setTimeout(()=>{ chiudiPrModal(); prApriCalendario(d._id) }, 1600)
     } else {
       // pagamento carta/PayPal: la lezione è registrata come "da pagare".
@@ -1224,6 +1229,7 @@ function renderMieLezioni(){
     let payBadge=''
     if(metodo==='ore_pacchetto') payBadge='<span class="chip">🎟 Pacchetto</span>'
     else if(metodo==='contanti') payBadge='<span class="badge ba">💵 Contanti da confermare</span>'
+    else if(metodo==='bonifico') payBadge='<span class="badge ba">🏦 Bonifico da confermare</span>'
     else if((metodo==='sumup'||metodo==='paypal') && !l.pagamento_id) payBadge='<span class="badge ba">Da pagare</span>'
     else if(metodo) payBadge='<span class="chip">'+esc(metodo==='paypal'?'PayPal':'Carta')+'</span>'
     // azioni
