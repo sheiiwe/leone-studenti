@@ -171,6 +171,10 @@
     </div>
     <div class="card">
       <div id="pr-cal-box"><div class="muted">Carico le disponibilità…</div></div>
+      <div style="margin-top:12px;padding-top:12px;border-top:0.5px solid var(--border)">
+        <div class="muted" style="font-size:12.5px;margin-bottom:8px">Nessun orario adatto tra quelli disponibili? Puoi proporne uno tu: il docente lo accetterà o rifiuterà.</div>
+        <button class="btn" onclick="apriRichiestaModal()">🕐 Richiedi un altro orario</button>
+      </div>
     </div>
   </div>
 
@@ -203,6 +207,28 @@
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn" style="flex:1" onclick="chiudiPrModal()">Annulla</button>
       <button class="btn btn-p" style="flex:1" id="pr-modal-conferma" onclick="confermaPrenotazione()">Prenota</button>
+    </div>
+  </div>
+</div>
+
+<!-- modale richiesta orario personalizzato -->
+<div id="pr-req-modal" class="modal-bg hidden">
+  <div class="modal-card">
+    <h2 style="margin:0 0 4px">Richiedi un orario</h2>
+    <div id="pr-req-doc" class="muted" style="margin-bottom:10px"></div>
+    <label class="fld"><span>Giorno</span><input id="pr-req-data" type="date"></label>
+    <div style="display:flex;gap:10px">
+      <label class="fld" style="flex:1"><span>Ora inizio</span><select id="pr-req-ora"></select></label>
+      <label class="fld" style="flex:1"><span>Durata</span><select id="pr-req-dur" onchange="_reqPayOpts()"><option value="1">1 ora</option><option value="2">2 ore</option><option value="3">3 ore</option></select></label>
+    </div>
+    <div style="margin-top:8px;font-size:12.5px;font-weight:600;color:var(--text2)">Come vuoi pagare (se accettata)?</div>
+    <div id="pr-req-pay"></div>
+    <label class="fld" style="margin-top:12px"><span>Note per il docente (facoltativo)</span>
+      <textarea id="pr-req-note" placeholder="Es. ho bisogno di questo orario perché…" style="min-height:52px"></textarea></label>
+    <div id="pr-req-msg" style="margin-top:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn" style="flex:1" onclick="chiudiReqModal()">Annulla</button>
+      <button class="btn btn-p" style="flex:1" id="pr-req-btn" onclick="inviaRichiesta()">Invia richiesta</button>
     </div>
   </div>
 </div>
@@ -1140,9 +1166,9 @@ async function confermaPrenotazione(){
   if(pay==='ore_pacchetto' && _prResidueReali(d._id)<dur){ msg.innerHTML='<div class="msg msg-err">Ore residue insufficienti.</div>'; return }
   const prezzo=_prPrezzoOra(d); const importo=prezzo!=null?(prezzo*dur):null
   btn.disabled=true; const _t=btn.textContent; btn.textContent='Prenoto…'
+  let pagId=null
   try{
     // pagamento in contanti/bonifico: creo prima la richiesta "in attesa di conferma"
-    let pagId=null
     if(pay==='contanti'||pay==='bonifico'){
       const rp=await db.from('pagamenti').insert({
         prodotto_nome:'Lezione '+(_prMateriaLink(d._id)||'')+' · '+(d.nome||''),
@@ -1186,8 +1212,82 @@ async function confermaPrenotazione(){
     }
   }catch(e){
     const em=(e&&e.message)||String(e)
-    msg.innerHTML='<div class="msg msg-err">Errore prenotazione: '+esc(em)+'</div>'
+    const emL=em.toLowerCase()
+    // pulizia richiesta di pagamento orfana (creata prima della lezione)
+    if(pagId){ try{ await db.from('pagamenti').delete().eq('id',pagId) }catch(_e){} }
+    if(emL.indexOf('disponibile')>=0 || emL.indexOf('quel momento')>=0){
+      msg.innerHTML='<div class="msg msg-err">Questo orario non è più disponibile: è appena stato prenotato da qualcun altro. Ricarico il calendario…</div>'
+      setTimeout(()=>{ chiudiPrModal(); prApriCalendario(d._id) }, 1700)
+    } else if(emL.indexOf('preavviso')>=0 || emL.indexOf('12 ore')>=0){
+      msg.innerHTML='<div class="msg msg-err">Non è possibile prenotare con meno di 12 ore di preavviso. Scegli un altro orario.</div>'
+      setTimeout(()=>{ chiudiPrModal(); prApriCalendario(d._id) }, 1900)
+    } else {
+      msg.innerHTML='<div class="msg msg-err">Errore prenotazione: '+esc(em)+'</div>'
+    }
   }
+  btn.disabled=false; btn.textContent=_t
+}
+
+// ---- Richiesta orario personalizzato ----
+function apriRichiestaModal(){
+  if(!_PR_DOC_CUR) return
+  const d=_PR_DOC_CUR
+  document.getElementById('pr-req-doc').innerHTML='<b>'+esc(d.nome||'Docente')+'</b> · '+esc(_prMateriaLink(d._id)||'lezione')
+  const dm=new Date(); dm.setDate(dm.getDate()+1)
+  const di=document.getElementById('pr-req-data'); di.value=_prISO(dm); di.min=_prISO(new Date())
+  const os=document.getElementById('pr-req-ora'); os.innerHTML=''
+  for(let h=8;h<=20;h++){ os.innerHTML+='<option value="'+h+'">'+('0'+h).slice(-2)+':00</option>' }
+  document.getElementById('pr-req-dur').value='1'
+  document.getElementById('pr-req-note').value=''
+  document.getElementById('pr-req-msg').innerHTML=''
+  _reqPayOpts()
+  document.getElementById('pr-req-modal').classList.remove('hidden')
+}
+function _reqPayOpts(){
+  const d=_PR_DOC_CUR; if(!d) return
+  const res=_prResidueReali(d._id), prezzo=_prPrezzoOra(d)
+  const dur=Number((document.getElementById('pr-req-dur')||{}).value||1)
+  const importo=prezzo!=null?prezzo*dur:null
+  const oreOk=res>=dur
+  document.getElementById('pr-req-pay').innerHTML=
+    '<label class="pay-opt'+(oreOk?'':' dis')+'"><input type="radio" name="reqpay" value="ore_pacchetto" '+(oreOk?'checked':'disabled')+'><span>🎟 <b>Ore del pacchetto</b> <span class="muted">('+res+' residue)</span></span></label>'+
+    '<label class="pay-opt"><input type="radio" name="reqpay" value="sumup" '+(oreOk?'':'checked')+'><span>💳 <b>Carta</b>'+(importo!=null?' <span class="muted">'+_eurPR(importo)+'</span>':'')+'</span></label>'+
+    '<label class="pay-opt"><input type="radio" name="reqpay" value="paypal"><span>🅿️ <b>PayPal</b></span></label>'+
+    '<label class="pay-opt"><input type="radio" name="reqpay" value="contanti"><span>💵 <b>Contanti</b></span></label>'+
+    '<label class="pay-opt"><input type="radio" name="reqpay" value="bonifico"><span>🏦 <b>Bonifico</b></span></label>'
+}
+function chiudiReqModal(){ document.getElementById('pr-req-modal').classList.add('hidden') }
+async function inviaRichiesta(){
+  const d=_PR_DOC_CUR; if(!d) return
+  const dataV=(document.getElementById('pr-req-data')||{}).value
+  const ora=Number((document.getElementById('pr-req-ora')||{}).value||0)
+  const dur=Number((document.getElementById('pr-req-dur')||{}).value||1)
+  const pay=(document.querySelector('input[name="reqpay"]:checked')||{}).value||'sumup'
+  const note=((document.getElementById('pr-req-note')||{}).value||'').trim()
+  const msg=document.getElementById('pr-req-msg'); const btn=document.getElementById('pr-req-btn')
+  if(!dataV){ msg.innerHTML='<div class="msg msg-err">Scegli un giorno.</div>'; return }
+  const inizio=new Date(dataV+'T00:00:00'); inizio.setHours(ora,0,0,0)
+  const fine=new Date(inizio.getTime()+dur*3600000)
+  if(inizio.getTime() < Date.now()+3600000){ msg.innerHTML='<div class="msg msg-err">Scegli un orario futuro.</div>'; return }
+  if(pay==='ore_pacchetto' && _prResidueReali(d._id)<dur){ msg.innerHTML='<div class="msg msg-err">Ore residue insufficienti.</div>'; return }
+  const prezzo=_prPrezzoOra(d); const importo=prezzo!=null?prezzo*dur:null
+  btn.disabled=true; const _t=btn.textContent; btn.textContent='Invio…'
+  try{
+    const row={
+      docente_id:d._id, studente_id:(MIO_S&&MIO_S._id)||null,
+      inizio:inizio.toISOString(), fine:fine.toISOString(),
+      materia:_prMateriaLink(d._id)||null,
+      livello:((document.getElementById('pr-f-livello')||{}).value)||((_prLivelliDoc(d)[0])||null),
+      stato:'richiesta', note_studente:note||null,
+      metodo_pagamento:pay, prezzo_lezione:(pay==='ore_pacchetto'?null:importo)
+    }
+    const ins=await db.from('lezioni_prenotate').insert(row).select().single()
+    if(ins.error) throw ins.error
+    try{ await db.from('lezioni_storico').insert({ lezione_id:ins.data&&ins.data.id, azione:'richiesta_creata', eseguita_da:'studente', eseguita_da_id:(MIO_S&&MIO_S._id)||null, dati:{ pagamento:pay, ore:dur } }) }catch(e){}
+    await caricaMieLezioni()
+    msg.innerHTML='<div class="msg msg-ok">Richiesta inviata ✓ Il docente riceverà un avviso e potrà accettarla o rifiutarla. La trovi in “Le mie lezioni”.</div>'
+    setTimeout(chiudiReqModal, 2000)
+  }catch(e){ msg.innerHTML='<div class="msg msg-err">Errore: '+esc((e&&e.message)||e)+'</div>' }
   btn.disabled=false; btn.textContent=_t
 }
 
@@ -1214,7 +1314,7 @@ function renderMieLezioni(){
   if(_MP_FILTER==='cancellate') list=list.filter(l=>String(l.stato||'').indexOf('cancellata')===0)
   else if(_MP_FILTER==='oggi') list=list.filter(l=>new Date(l.inizio).toDateString()===oggi && String(l.stato||'').indexOf('cancellata')<0)
   else if(_MP_FILTER==='passate') list=list.filter(l=>new Date(l.fine).getTime()<now && String(l.stato||'').indexOf('cancellata')<0)
-  else list=list.filter(l=>new Date(l.fine).getTime()>=now && String(l.stato||'').indexOf('cancellata')<0)
+  else list=list.filter(l=>new Date(l.fine).getTime()>=now && String(l.stato||'').indexOf('cancellata')<0 && l.stato!=='rifiutata')
   if(!list.length){ box.innerHTML='<div class="empty">Nessuna lezione in questa vista.</div>'; return }
   box.innerHTML=list.map(l=>{
     const d1=new Date(l.inizio), d2=new Date(l.fine)
@@ -1223,6 +1323,9 @@ function renderMieLezioni(){
     const stato=l.stato||'confermata'
     let badge
     if(stato==='svolta') badge='<span class="badge bg">Svolta</span>'
+    else if(stato==='no_show') badge='<span class="badge br">Assente</span>'
+    else if(stato==='richiesta') badge='<span class="badge ba">Richiesta · in attesa del docente</span>'
+    else if(stato==='rifiutata') badge='<span class="badge br">Non accettata</span>'
     else if(stato.indexOf('cancellata')===0) badge='<span class="badge br">'+esc(stato==='cancellata_docente'?'Cancellata dal docente':(stato==='cancellata_studente'?'Cancellata da te':stato.replace('_',' ')))+'</span>'
     else badge='<span class="badge bb">Confermata</span>'
     const metodo=l.metodo_pagamento||''
