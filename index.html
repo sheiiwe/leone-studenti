@@ -233,6 +233,22 @@
   </div>
 </div>
 
+<!-- modale spostamento lezione -->
+<div id="pr-move-modal" class="modal-bg hidden">
+  <div class="modal-card">
+    <h2 style="margin:0 0 4px">🔄 Sposta lezione</h2>
+    <div id="pr-move-info" class="muted" style="margin-bottom:10px"></div>
+    <label class="fld"><span>Nuovo giorno</span><input id="pr-move-data" type="date"></label>
+    <label class="fld"><span>Nuova ora di inizio</span><select id="pr-move-ora"></select></label>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">La durata resta la stessa. Se l\u0027orario è fuori dalle disponibilità del docente, la lezione resterà in attesa della sua approvazione.</p>
+    <div id="pr-move-msg" style="margin-top:10px"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn" style="flex:1" onclick="chiudiSpostaModal()">Annulla</button>
+      <button class="btn btn-p" style="flex:1" id="pr-move-btn" onclick="confermaSposta()">Sposta lezione</button>
+    </div>
+  </div>
+</div>
+
 <!-- ====== BACHECA ====== -->
 <div id="screen-bacheca" class="wrap hidden">
   <div class="card"><h2>Bacheca</h2><p class="muted">Comunicazioni da Leone Consulting.</p></div>
@@ -949,7 +965,7 @@ function _prLivelliDoc(d){
   return [...out]
 }
 function _prPrezzoOra(d){ const p=(d&&(d.prezzoOra!=null?d.prezzoOra:(d.tariffaOra!=null?d.tariffaOra:null))); const n=Number(p); return (p!=null&&p!==''&&!isNaN(n))?n:null }
-function _prResidueBase(docId){ const l=_prLink(docId); if(!l) return 0; return Math.max(0,(Number(l.oreTot)||0)-(Number(l.oreFatte)||0)) }
+function _prResidueBase(docId){ const l=_prLink(docId); if(!l) return 0; return Math.max(0,(Number(l.oreTot)||0)+(Number(l.oreBonus)||0)-(Number(l.oreFatte)||0)) }
 function _prOreImpegnate(docId){
   // ore già "prenotate e pagate col pacchetto" per lezioni future confermate → per non sforare il residuo
   const now=Date.now()
@@ -1299,6 +1315,66 @@ async function inviaRichiesta(){
   btn.disabled=false; btn.textContent=_t
 }
 
+// ---- Spostamento lezione ----
+let _MOVE_LEZ=null
+function apriSpostaLezione(id){
+  const l=(_MIE_LEZIONI||[]).find(x=>String(x.id)===String(id)); if(!l) return
+  _MOVE_LEZ=l
+  const d1=new Date(l.inizio), d2=new Date(l.fine)
+  const dur=Math.max(1, Math.round((d2-d1)/3600000))
+  document.getElementById('pr-move-info').innerHTML='<b>'+esc(_docNome(l.docente_id))+'</b>'+(l.materia?(' · '+esc(l.materia)):'')+'<br>Attuale: '+esc(d1.toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'}))+' alle '+esc(d1.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}))+' ('+dur+'h)'
+  const di=document.getElementById('pr-move-data'); di.min=_prISO(new Date()); di.value=_prISO(d1)
+  const os=document.getElementById('pr-move-ora'); os.innerHTML=''
+  for(let h=8;h<=20;h++){ os.innerHTML+='<option value="'+h+'">'+('0'+h).slice(-2)+':00</option>' }
+  os.value=String(d1.getHours())
+  document.getElementById('pr-move-msg').innerHTML=''
+  document.getElementById('pr-move-modal').classList.remove('hidden')
+}
+function chiudiSpostaModal(){ document.getElementById('pr-move-modal').classList.add('hidden'); _MOVE_LEZ=null }
+async function confermaSposta(){
+  const l=_MOVE_LEZ; if(!l) return
+  const msg=document.getElementById('pr-move-msg'), btn=document.getElementById('pr-move-btn')
+  const dataV=(document.getElementById('pr-move-data')||{}).value
+  const ora=Number((document.getElementById('pr-move-ora')||{}).value||0)
+  if(!dataV){ msg.innerHTML='<div class="msg msg-err">Scegli un giorno.</div>'; return }
+  const d1=new Date(l.inizio), d2=new Date(l.fine)
+  const durMs=d2-d1
+  const nuovoIn=new Date(dataV+'T00:00:00'); nuovoIn.setHours(ora,0,0,0)
+  const nuovoFi=new Date(nuovoIn.getTime()+durMs)
+  if(nuovoIn.getTime() < Date.now()+PR_PREAVVISO_H*3600000){ msg.innerHTML='<div class="msg msg-err">Il nuovo orario deve essere almeno 12 ore da adesso.</div>'; return }
+  if(nuovoIn.getTime()===d1.getTime()){ msg.innerHTML='<div class="msg msg-err">È lo stesso orario di prima.</div>'; return }
+  btn.disabled=true; const _t=btn.textContent; btn.textContent='Sposto…'
+  try{
+    // lo slot è tra le disponibilità del docente? altrimenti diventa una richiesta da approvare
+    let libero=false
+    try{
+      const disp=await _prCaricaDisponibilita(l.docente_id)
+      const slots=_prCalcSlots(disp)
+      const set=slots[dataV]
+      libero=!!(set && set.has(ora))
+    }catch(e){ libero=false }
+    const nuovoStato = libero ? 'confermata' : 'richiesta'
+    const up=await db.from('lezioni_prenotate').update({
+      inizio:nuovoIn.toISOString(), fine:nuovoFi.toISOString(),
+      stato:nuovoStato, inizio_precedente:l.inizio, reminder_inviato:false,
+      updated_at:new Date().toISOString()
+    }).eq('id',l.id)
+    if(up.error) throw up.error
+    try{ await db.from('lezioni_storico').insert({ lezione_id:l.id, azione:'spostata', eseguita_da:'studente', eseguita_da_id:(MIO_S&&MIO_S._id)||null, dati:{ da:l.inizio, a:nuovoIn.toISOString(), stato:nuovoStato } }) }catch(e){}
+    await caricaMieLezioni()
+    msg.innerHTML = libero
+      ? '<div class="msg msg-ok">Lezione spostata ✓ Il docente è stato avvisato.</div>'
+      : '<div class="msg msg-ok">Richiesta inviata ✓ L\u0027orario è fuori dalle disponibilità del docente: resta in attesa della sua approvazione.</div>'
+    setTimeout(chiudiSpostaModal, 2200)
+  }catch(e){
+    const em=((e&&e.message)||String(e)).toLowerCase()
+    if(em.indexOf('disponibile')>=0||em.indexOf('quel momento')>=0) msg.innerHTML='<div class="msg msg-err">Il docente ha già una lezione in quell\u0027orario. Scegline un altro.</div>'
+    else if(em.indexOf('preavviso')>=0) msg.innerHTML='<div class="msg msg-err">Non puoi spostare a meno di 12 ore di preavviso.</div>'
+    else msg.innerHTML='<div class="msg msg-err">Errore: '+esc((e&&e.message)||e)+'</div>'
+  }
+  btn.disabled=false; btn.textContent=_t
+}
+
 // ---- Le mie lezioni ----
 async function caricaMieLezioni(){
   const box=document.getElementById('mie-lezioni-lista'); if(box && !_MIE_LEZIONI.length) box.innerHTML='<div class="muted">Caricamento…</div>'
@@ -1348,7 +1424,7 @@ function renderMieLezioni(){
     if(stato==='confermata'){
       const oreMancanti=(d1.getTime()-now)/3600000
       if(d1.getTime()>now){
-        if(oreMancanti>=PR_PREAVVISO_H) az='<button class="btn btn-sm" onclick="cancellaMiaLezione(\''+l.id+'\')" style="color:var(--red)">Cancella</button>'
+        if(oreMancanti>=PR_PREAVVISO_H) az='<button class="btn btn-sm" onclick="apriSpostaLezione(\''+l.id+'\')">🔄 Sposta</button> <button class="btn btn-sm" onclick="cancellaMiaLezione(\''+l.id+'\')" style="color:var(--red)">Cancella</button>'
         else az='<span class="muted" style="font-size:11px">Preavviso &lt;12h: contatta il docente in chat per spostarla</span>'
       }
     }
