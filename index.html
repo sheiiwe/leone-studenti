@@ -681,11 +681,11 @@ async function _caricaProdStu(){
   _PROD_STU.forEach(p=>{ const g=(p.gruppo||'').trim()
     if(g && cnt[g]>1){ if(done[g]) return; done[g]=true
       const items=_PROD_STU.filter(x=>(x.gruppo||'').trim()===g)
-      _opt+='<optgroup label="'+esc(g)+'">'+items.map(x=>'<option value="'+x.id+'">'+esc(x.nome||'')+' — '+(x.prezzo!=null?_eurStu(x.prezzo):'su richiesta')+'</option>').join('')+'</optgroup>'
-    } else { _opt+='<option value="'+p.id+'">'+esc(p.nome||'')+' — '+(p.prezzo!=null?_eurStu(p.prezzo):'su richiesta')+'</option>' }
+      _opt+='<optgroup label="'+esc(g)+'">'+items.map(x=>'<option value="'+x.id+'">'+esc(x.nome||'')+' — '+(x.prezzo!=null?_eurStu(x.prezzo):'su richiesta')+(x.annuale?' /anno':'')+'</option>').join('')+'</optgroup>'
+    } else { _opt+='<option value="'+p.id+'">'+esc(p.nome||'')+' — '+(p.prezzo!=null?_eurStu(p.prezzo):'su richiesta')+(p.annuale?' /anno':'')+'</option>' }
   })
   sel.innerHTML=_opt
-  sel.onchange=()=>{ const p=_PROD_STU.find(x=>String(x.id)===String(sel.value)); const box=document.getElementById('pg-prod-info'); if(!p||!box){ box.innerHTML=''; return } box.innerHTML='<div class="card" style="padding:10px;background:var(--surface2)"><div style="font-weight:600">'+esc(p.nome)+'</div>'+(p.descrizione?'<div class="muted" style="font-size:12px;margin-top:4px">'+esc(p.descrizione)+'</div>':'')+'<div style="margin-top:6px;color:var(--blu);font-weight:700">'+(p.prezzo!=null?_eurStu(p.prezzo):'—')+'</div></div>' }
+  sel.onchange=()=>{ const p=_PROD_STU.find(x=>String(x.id)===String(sel.value)); const box=document.getElementById('pg-prod-info'); if(!p||!box){ box.innerHTML=''; return } box.innerHTML='<div class="card" style="padding:10px;background:var(--surface2)"><div style="font-weight:600">'+esc(p.nome)+'</div>'+(p.descrizione?'<div class="muted" style="font-size:12px;margin-top:4px">'+esc(p.descrizione)+'</div>':'')+'<div style="margin-top:6px;color:var(--blu);font-weight:700">'+(p.prezzo!=null?_eurStu(p.prezzo):'\u2014')+(p.annuale?'<span style="font-size:11px;font-weight:400;color:var(--text2)">/anno</span>':'')+'</div>'+(p.annuale?'<div style="font-size:11px;color:#e65100;font-weight:600;margin-top:2px">\ud83d\udcc5 Pagamento annuale'+(p.anni?(' \u00b7 '+p.anni+' anni'):'')+'</div>':'')+((p.compagnia&&String(p.compagnia).trim())?'<div style="font-size:11px;color:#5e35b1;font-weight:600">'+esc(p.compagnia)+'</div>':'')+'</div>' }
 }
 function _eurStu(v){ if(v==null||v==='') return '—'; const n=Number(v); return isNaN(n)?'—':(n.toFixed(2).replace('.',',')+' €') }
 async function genPagamentoStu(){
